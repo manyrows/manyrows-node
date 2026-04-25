@@ -1,4 +1,4 @@
-// Public surface of @manyrows/node.
+// Public surface of @manyrows/manyrows-node.
 
 export { Client, ManyRowsError } from "./client.js";
 export type {

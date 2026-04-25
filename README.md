@@ -1,11 +1,11 @@
-# @manyrows/node
+# @manyrows/manyrows-node
 
 Official Node.js SDK for [ManyRows](https://manyrows.com). Mirrors the surface of [`manyrows-go`](https://github.com/manyrows/manyrows-go).
 
 ## Install
 
 ```bash
-npm install @manyrows/node
+npm install @manyrows/manyrows-node
 ```
 
 Requires **Node 18+** (uses the global `fetch`). TypeScript types are bundled.
@@ -15,7 +15,7 @@ Requires **Node 18+** (uses the global `fetch`). TypeScript types are bundled.
 The client wraps the ManyRows Server API. Requires an API key.
 
 ```ts
-import { Client } from "@manyrows/node";
+import { Client } from "@manyrows/manyrows-node";
 
 const client = new Client({
   baseURL: "https://app.manyrows.com",
@@ -79,7 +79,7 @@ const fields = await client.listUserFields();
 Non-2xx responses throw `ManyRowsError`:
 
 ```ts
-import { ManyRowsError } from "@manyrows/node";
+import { ManyRowsError } from "@manyrows/manyrows-node";
 
 try {
   await client.getUser("bogus");
@@ -98,7 +98,7 @@ Validates bearer tokens from your end users by calling the ManyRows `/a/app/me` 
 
 ```ts
 import express from "express";
-import { expressMiddleware, type AuthenticatedRequest } from "@manyrows/node";
+import { expressMiddleware, type AuthenticatedRequest } from "@manyrows/manyrows-node";
 
 const app = express();
 
@@ -131,7 +131,7 @@ declare global {
 Use the lower-level `verifyToken`. Returns the user ID on success, `null` if rejected, throws on network/server errors:
 
 ```ts
-import { verifyToken, bearerToken } from "@manyrows/node";
+import { verifyToken, bearerToken } from "@manyrows/manyrows-node";
 
 // Hono example:
 app.use("*", async (c, next) => {
@@ -157,7 +157,7 @@ app.use("*", async (c, next) => {
 
 ```ts
 import express from "express";
-import { Client, expressMiddleware, type AuthenticatedRequest } from "@manyrows/node";
+import { Client, expressMiddleware, type AuthenticatedRequest } from "@manyrows/manyrows-node";
 
 const client = new Client({
   baseURL: "https://app.manyrows.com",
@@ -200,7 +200,7 @@ app.listen(3000);
 Pass a `fetch` override into either `Client` or `verifyToken` for testing, request tracing, or undici dispatcher injection:
 
 ```ts
-import { Client } from "@manyrows/node";
+import { Client } from "@manyrows/manyrows-node";
 
 const client = new Client({
   // ...

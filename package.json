@@ -1,5 +1,5 @@
 {
-  "name": "@manyrows/node",
+  "name": "@manyrows/manyrows-node",
   "version": "1.0.0",
   "description": "Official Node.js SDK for the ManyRows Server API",
   "license": "MIT",
