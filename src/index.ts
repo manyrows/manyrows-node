@@ -22,3 +22,12 @@ export type {
   ExpressMiddlewareOptions,
   AuthenticatedRequest,
 } from "./auth.js";
+
+export { BffClient, BffError, PublicProxy, OAuthCallbackHtml, appendQuery } from "./bff.js";
+export type {
+  BffClientOptions,
+  BffSession,
+  ClientContext,
+  ProxyResponse,
+  PublicProxyOptions,
+} from "./bff.js";
