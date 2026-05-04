@@ -195,6 +195,23 @@ app.get("/api/admin", async (req, res) => {
 app.listen(3000);
 ```
 
+## Tier 1 vs full-BFF
+
+The `verifyToken` / `expressMiddleware` helpers above are for **Tier 1**:
+AppKit holds an access token in the browser and your backend validates
+it on every authed request. Use that when your app is a SPA with no
+backend session of its own.
+
+For **full-BFF** (recommended for production): the browser holds only
+an HttpOnly session cookie set by your backend; AppKit hits relative
+paths on your server, and your handlers forward to ManyRows via
+`BffClient` (auth + data calls) and `PublicProxy` (unauthed bootstrap
++ pre-login surface). There is no `expressMiddleware` for BFF mode —
+the cookie + proxy pattern replaces it: read the session ID from your
+own cookie in each handler, pass it to `bff.proxy*`, propagate the
+upstream status to the browser. A 401 from the proxy means the
+session expired; clear your cookie and respond 401 yourself.
+
 ## BFF Client (full-BFF mode)
 
 `BffClient` calls the ManyRows `/bff/*` server-to-server endpoints — the

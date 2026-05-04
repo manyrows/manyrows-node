@@ -4,8 +4,10 @@ import {
   BffError,
   PublicProxy,
   OAuthCallbackHtml,
-  appendQuery,
 } from "../src/index.js";
+// appendQuery is @internal — tested via the deep import path so it stays
+// off the public barrel.
+import { appendQuery } from "../src/bff.js";
 
 type MockReply = { body: unknown; status?: number; contentType?: string } | { error: Error };
 
@@ -248,6 +250,12 @@ describe("OAuthCallbackHtml.success", () => {
   it("flags totpSetupRequired when true", () => {
     const html = OAuthCallbackHtml.success("u_42", true, "/welcome");
     expect(html).toContain('"totpSetupRequired":true');
+  });
+
+  it("omits userId when undefined", () => {
+    const html = OAuthCallbackHtml.success(undefined, false, "/");
+    expect(html).toContain('"ok":true');
+    expect(html).not.toContain("userId");
   });
 });
 

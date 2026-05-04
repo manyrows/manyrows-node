@@ -122,9 +122,11 @@ export class BffClient {
     if (!opts.clientSecret) throw new Error("manyrows: clientSecret is required");
 
     this.baseURL = opts.baseURL.replace(/\/+$/, "");
-    this.basicAuth =
-      "Basic " +
-      Buffer.from(`${opts.clientId}:${opts.clientSecret}`, "utf8").toString("base64");
+    // btoa instead of Buffer keeps the SDK runnable on edge runtimes
+    // (Cloudflare Workers, Deno) that don't ship a Buffer global. Both
+    // values are ASCII (clientId is opaque hex / random, secret is
+    // base64-ish) so btoa's "no non-Latin1" constraint is fine here.
+    this.basicAuth = "Basic " + btoa(`${opts.clientId}:${opts.clientSecret}`);
     this.fetchImpl = opts.fetch ?? fetch;
   }
 
@@ -385,7 +387,14 @@ export class BffClient {
   }
 }
 
-/** Raw upstream proxy response — caller decides what to forward. */
+/**
+ * Raw upstream proxy response — caller decides what to forward.
+ *
+ * `body` is always decoded as text (UTF-8). All ManyRows /bff/proxy/*
+ * endpoints respond with JSON, so this is fine in practice; if you
+ * extend the proxy to forward binary upstream responses you'll need
+ * a separate path that uses `arrayBuffer()` instead.
+ */
 export interface ProxyResponse {
   status: number;
   body: string;
@@ -593,7 +602,11 @@ function render(status: number, payload: Record<string, unknown>, redirectUrl: s
 </html>`;
 }
 
-/** Append `key=value` to `base`, picking `?` or `&` as the separator. */
+/**
+ * Append `key=value` to `base`, picking `?` or `&` as the separator.
+ *
+ * @internal Exported for tests; not part of the public API.
+ */
 export function appendQuery(base: string, key: string, value: string): string {
   if (!base) return base;
   const sep = base.indexOf("?") >= 0 ? "&" : "?";
