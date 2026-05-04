@@ -106,7 +106,7 @@ describe("verifyToken", () => {
     const fetchMock = mockFetch([{ body: { user: { id: "u" } } }]);
     await verifyToken("tok", { ...verifyOpts, baseURL: "https://app.manyrows.com/", fetch: fetchMock });
     const url = (fetchMock as any).mock.calls[0][0] as string;
-    expect(url).toBe("https://app.manyrows.com/x/acme/apps/app_123/a/app/me");
+    expect(url).toBe("https://app.manyrows.com/x/acme/apps/app_123/a/me");
   });
 });
 

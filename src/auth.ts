@@ -1,6 +1,6 @@
 // Bearer-token verification for server-side auth. Mirrors the Go SDK's
 // `auth.Middleware` pattern: validate the user's JWT against the ManyRows
-// /a/app/me endpoint, then attach the user ID to the request.
+// /a/me endpoint, then attach the user ID to the request.
 
 const USER_AGENT = "manyrows-node-auth/1.0";
 
@@ -22,7 +22,7 @@ export interface VerifyOptions {
 }
 
 /**
- * Verify a user's bearer token by calling the ManyRows /a/app/me endpoint.
+ * Verify a user's bearer token by calling the ManyRows /a/me endpoint.
  *
  * Returns the user ID on success.
  * Returns null if the token is empty or rejected by ManyRows (401/403).
@@ -37,7 +37,7 @@ export async function verifyToken(
 ): Promise<string | null> {
   if (!token) return null;
 
-  const meURL = `${opts.baseURL.replace(/\/+$/, "")}/x/${opts.workspaceSlug}/apps/${opts.appId}/a/app/me`;
+  const meURL = `${opts.baseURL.replace(/\/+$/, "")}/x/${opts.workspaceSlug}/apps/${opts.appId}/a/me`;
   const fetchImpl = opts.fetch ?? fetch;
 
   const res = await fetchImpl(meURL, {
