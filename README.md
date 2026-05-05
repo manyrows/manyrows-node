@@ -33,6 +33,31 @@ const delivery = await client.getDelivery();
 // delivery.flags.client, delivery.flags.server
 ```
 
+### Decrypt secrets
+
+Secret values are returned as encrypted envelopes. Decrypt them with
+your workspace private key (downloaded once when you generated the
+workspace key in the admin UI):
+
+```ts
+import { Client, decryptSecret, type PrivateKeyJwk } from "@manyrows/manyrows-node";
+
+const privateKeyJwk: PrivateKeyJwk = JSON.parse(process.env.MANYROWS_WORKSPACE_PRIVATE_KEY!);
+const delivery = await client.getDelivery();
+
+for (const sec of delivery.config.secrets) {
+  if (!sec.isSet || !sec.envelope) continue;
+  const plaintext = decryptSecret(sec.envelope, privateKeyJwk);
+  // plaintext is a Buffer of the JSON-encoded value. For a string
+  // secret you'll get `"hello"` (with quotes) — JSON.parse to recover.
+  const value = JSON.parse(plaintext.toString("utf8"));
+}
+```
+
+The private key never leaves your server — secrets are decrypted in
+process. See `src/secrets.ts` for the full algorithm (ECDH P-256 +
+HKDF-SHA256 + AES-256-GCM).
+
 ### Check permission
 
 ```ts

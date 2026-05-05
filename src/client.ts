@@ -44,6 +44,13 @@ export interface ConfigItem {
   value?: unknown;
   /** For `secrets` only: whether a value is configured (the value itself isn't returned). */
   isSet?: boolean;
+  /**
+   * For `secrets` only: the encrypted envelope, as returned by the
+   * server-API delivery endpoint. Pass to `decryptSecret` along with
+   * your workspace private JWK to recover the plaintext. Only set
+   * when `isSet` is true.
+   */
+  envelope?: unknown;
 }
 
 export interface FeatureFlag {
