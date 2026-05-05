@@ -5,7 +5,8 @@
 // router-mount helper (Express vs. Fastify vs. Hono vs. raw http), so
 // this module provides the typed HTTP calls + the popup HTML + public
 // proxies — the irreducible pieces a Node backend needs to stand up
-// against AppKit's bffMode. Customers wire the routes themselves.
+// against AppKit when BFF mode is enabled in the ManyRows admin.
+// Customers wire the routes themselves.
 
 const USER_AGENT_BFF = "manyrows-node-bff/1.0";
 const USER_AGENT_PUBLIC_PROXY = "manyrows-node-public-proxy/1.0";
@@ -413,20 +414,23 @@ export interface PublicProxyOptions {
 }
 
 /**
- * Forwards the unauthenticated browser-facing surface AppKit hits in
- * bffMode. Two patterns:
+ * Forwards the unauthenticated browser-facing surface AppKit hits when
+ * BFF mode is enabled. Two patterns:
  *
- * - `GET /apps/{appId}` → `/x/{workspaceSlug}/apps/{appId}` (public boot:
- *   auth methods, branding, OAuth client IDs)
+ * - `GET /apps/{appId}` → `/x/{workspaceSlug}/apps/{appId}` (public app
+ *   config — kept here for tooling parity; AppKit now fetches this
+ *   directly from ManyRows via CORS, so wiring this proxy on your
+ *   backend is optional)
  * - `GET|POST /apps/{appId}/auth/*` → pre-login auth surface (OAuth
- *   authorize, OTP request, etc.)
+ *   authorize, OTP request, etc.) — AppKit hits these on your origin
+ *   so they MUST be wired
  *
  * Conceptually distinct from {@link BffClient}: that calls authenticated
  * server-to-server endpoints with HTTP Basic; this just relays browser
- * requests with no credentials. The Go SDK's `MountAppBoot` does both
- * inside one router-mount helper; Node land has no portable equivalent
- * so the customer's framework wires the routes manually and calls into
- * this class.
+ * requests with no credentials. The Go SDK's `MountAppBoot` only mounts
+ * the auth surface; Node land has no portable equivalent so the
+ * customer's framework wires the routes manually and calls into this
+ * class.
  */
 export class PublicProxy {
   private readonly baseURL: string;
