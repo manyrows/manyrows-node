@@ -23,11 +23,13 @@ export type {
   AuthenticatedRequest,
 } from "./auth.js";
 
-export { BffClient, BffError, PublicProxy, OAuthCallbackHtml } from "./bff.js";
+export { BffClient, BffError, PublicProxy, OAuthCallbackHtml, dispatchOAuthCallback } from "./bff.js";
 export type {
   BffClientOptions,
   BffSession,
   ClientContext,
   ProxyResponse,
   PublicProxyOptions,
+  OAuthCallbackOutcome,
+  DispatchOAuthCallbackOptions,
 } from "./bff.js";

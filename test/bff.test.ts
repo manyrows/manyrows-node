@@ -4,6 +4,7 @@ import {
   BffError,
   PublicProxy,
   OAuthCallbackHtml,
+  dispatchOAuthCallback,
 } from "../src/index.js";
 // appendQuery is @internal — tested via the deep import path so it stays
 // off the public barrel.
@@ -307,6 +308,131 @@ describe("OAuthCallbackHtml structure", () => {
     // Only the wrapping </script> tag may appear in the source.
     const closes = (html.match(/<\/script>/g) ?? []).length;
     expect(closes).toBe(1);
+  });
+});
+
+// ===== dispatchOAuthCallback =====
+
+describe("dispatchOAuthCallback", () => {
+  const REDIRECT = "https://yourapp.com/auth/oauth/callback";
+  const SUCCESS = "/";
+  const ERR = "/login?failed=1";
+  const TOTP = "/login/totp";
+
+  it("returns error when query.error is set, without calling exchange", async () => {
+    const f = mockFetch([]); // no upstream call expected
+    const bff = newBff(f);
+    const out = await dispatchOAuthCallback({
+      query: { error: "provider_exchange_failed" },
+      bff,
+      redirectUri: REDIRECT,
+      successRedirect: SUCCESS,
+      errorRedirect: ERR,
+    });
+    expect(out.kind).toBe("error");
+    if (out.kind === "error") {
+      expect(out.error).toBe("provider_exchange_failed");
+      expect(out.html).toContain("provider_exchange_failed");
+    }
+    expect((f as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+  });
+
+  it("returns totp when challengeRequired=1, without calling exchange", async () => {
+    const f = mockFetch([]);
+    const bff = newBff(f);
+    const out = await dispatchOAuthCallback({
+      query: { challengeRequired: "1", challengeToken: "ct_abc", state: "s" },
+      bff,
+      redirectUri: REDIRECT,
+      successRedirect: SUCCESS,
+      errorRedirect: ERR,
+      totpRedirect: TOTP,
+    });
+    expect(out.kind).toBe("totp");
+    if (out.kind === "totp") {
+      expect(out.challengeToken).toBe("ct_abc");
+      expect(out.html).toContain('"totpRequired":true');
+      expect(out.html).toContain("/login/totp?challengeToken=ct_abc");
+    }
+    expect((f as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+  });
+
+  it("returns missing_code when neither error nor code nor challengeRequired present", async () => {
+    const f = mockFetch([]);
+    const bff = newBff(f);
+    const out = await dispatchOAuthCallback({
+      query: {},
+      bff,
+      redirectUri: REDIRECT,
+      successRedirect: SUCCESS,
+      errorRedirect: ERR,
+    });
+    expect(out.kind).toBe("error");
+    if (out.kind === "error") expect(out.error).toBe("missing_code");
+  });
+
+  it("exchanges the code and returns success with the session", async () => {
+    const f = mockFetch([
+      { body: { sessionId: "sess_123", userId: "u_42", expiresAt: "2030-01-01T00:00:00Z" } },
+    ]);
+    const bff = newBff(f);
+    const out = await dispatchOAuthCallback({
+      query: { code: "abc123", state: "s" },
+      bff,
+      redirectUri: REDIRECT,
+      successRedirect: SUCCESS,
+      errorRedirect: ERR,
+    });
+    expect(out.kind).toBe("success");
+    if (out.kind === "success") {
+      expect(out.session.sessionId).toBe("sess_123");
+      expect(out.session.userId).toBe("u_42");
+      expect(out.html).toContain('"userId":"u_42"');
+      expect(out.html).toContain('redirectURL = "/"');
+    }
+  });
+
+  it("returns totp when exchange comes back with totpRequired", async () => {
+    const f = mockFetch([{ body: { totpRequired: true, challengeToken: "ct_xyz" } }]);
+    const bff = newBff(f);
+    const out = await dispatchOAuthCallback({
+      query: { code: "abc123" },
+      bff,
+      redirectUri: REDIRECT,
+      successRedirect: SUCCESS,
+      errorRedirect: ERR,
+      totpRedirect: TOTP,
+    });
+    expect(out.kind).toBe("totp");
+    if (out.kind === "totp") expect(out.challengeToken).toBe("ct_xyz");
+  });
+
+  it("surfaces upstream error code when exchange fails with JSON body", async () => {
+    const f = mockFetch([{ status: 401, body: { error: "exchange_token_invalid" } }]);
+    const bff = newBff(f);
+    const out = await dispatchOAuthCallback({
+      query: { code: "abc123" },
+      bff,
+      redirectUri: REDIRECT,
+      successRedirect: SUCCESS,
+      errorRedirect: ERR,
+    });
+    expect(out.kind).toBe("error");
+    if (out.kind === "error") expect(out.error).toBe("exchange_token_invalid");
+  });
+
+  it("falls back to exchange_failed when error body isn't JSON", async () => {
+    const f = mockFetch([{ status: 500, body: "not json" }]);
+    const bff = newBff(f);
+    const out = await dispatchOAuthCallback({
+      query: { code: "abc123" },
+      bff,
+      redirectUri: REDIRECT,
+      successRedirect: SUCCESS,
+      errorRedirect: ERR,
+    });
+    expect(out.kind).toBe("error");
+    if (out.kind === "error") expect(out.error).toBe("exchange_failed");
   });
 });
 

@@ -561,6 +561,126 @@ export const OAuthCallbackHtml = {
   },
 };
 
+// ===========================================================================
+// dispatchOAuthCallback — full /auth/oauth/callback handler logic
+// ===========================================================================
+
+/**
+ * Discriminated outcome of {@link dispatchOAuthCallback}. The customer's
+ * handler writes `html` to the response and, for the `success` branch,
+ * issues a cookie carrying `session.sessionId` before sending the body.
+ */
+export type OAuthCallbackOutcome =
+  | { kind: "success"; html: string; session: BffSession }
+  | { kind: "totp"; html: string; challengeToken: string }
+  | { kind: "error"; html: string; error: string };
+
+export interface DispatchOAuthCallbackOptions {
+  /** Parsed query string from the inbound request (e.g. `req.query` in Express). */
+  query: Record<string, string | string[] | undefined>;
+  /** Configured BFF client. */
+  bff: BffClient;
+  /** Same redirect URI that was passed when the OAuth flow started. */
+  redirectUri: string;
+  /** Where to navigate (full-page mode) on success. */
+  successRedirect: string;
+  /** Where to navigate (full-page mode) on error or as the totp fallback. */
+  errorRedirect: string;
+  /** Where to navigate (full-page mode) when TOTP is required. Optional — falls back to errorRedirect. */
+  totpRedirect?: string;
+  /** Forwarded browser metadata for the code-exchange call. */
+  ctx?: ClientContext;
+}
+
+/**
+ * Single entry point for `/auth/oauth/callback`. Mirrors the manyrows-go
+ * `Handlers.OAuthCallback`: parses the query (error / challengeRequired
+ * / code), exchanges the auth code via {@link BffClient.exchangeAuthCode}
+ * when present, and returns the popup-aware HTML the customer should
+ * write to the response — plus the parsed session on success so the
+ * customer's framework can issue its own cookie.
+ *
+ * Always returns a populated `html` field; the customer writes it
+ * regardless of branch. Only on `kind === "success"` is the cookie
+ * issued by the customer; `totp` and `error` branches are
+ * cookie-less by design.
+ */
+export async function dispatchOAuthCallback(
+  opts: DispatchOAuthCallbackOptions,
+): Promise<OAuthCallbackOutcome> {
+  const totpRedirect = opts.totpRedirect ?? "";
+  const get = (k: string): string => {
+    const v = opts.query[k];
+    return typeof v === "string" ? v.trim() : "";
+  };
+
+  const errCode = get("error");
+  if (errCode) {
+    return {
+      kind: "error",
+      error: errCode,
+      html: OAuthCallbackHtml.error(errCode, opts.errorRedirect),
+    };
+  }
+
+  if (get("challengeRequired") === "1") {
+    const ct = get("challengeToken");
+    return {
+      kind: "totp",
+      challengeToken: ct,
+      html: OAuthCallbackHtml.totp(ct, totpRedirect, opts.errorRedirect),
+    };
+  }
+
+  const code = get("code");
+  if (!code) {
+    return {
+      kind: "error",
+      error: "missing_code",
+      html: OAuthCallbackHtml.error("missing_code", opts.errorRedirect),
+    };
+  }
+
+  let session: BffSession;
+  try {
+    session = await opts.bff.exchangeAuthCode(code, opts.redirectUri, opts.ctx);
+  } catch (e) {
+    let exchangeErr = "exchange_failed";
+    if (e instanceof BffError && e.body) {
+      try {
+        const parsed = JSON.parse(e.body) as { error?: string };
+        if (parsed.error) exchangeErr = parsed.error;
+      } catch {
+        /* body wasn't JSON — keep the generic code */
+      }
+    }
+    return {
+      kind: "error",
+      error: exchangeErr,
+      html: OAuthCallbackHtml.error(exchangeErr, opts.errorRedirect),
+    };
+  }
+
+  if (session.totpRequired) {
+    const ct = session.challengeToken ?? "";
+    return {
+      kind: "totp",
+      challengeToken: ct,
+      html: OAuthCallbackHtml.totp(ct, totpRedirect, opts.errorRedirect),
+    };
+  }
+
+  return {
+    kind: "success",
+    session,
+    html: OAuthCallbackHtml.success(
+      session.userId,
+      session.totpSetupRequired === true,
+      opts.successRedirect,
+    ),
+  };
+}
+
 function render(status: number, payload: Record<string, unknown>, redirectUrl: string | null): string {
   // Defuse </script> injection: an error code or other field whose
   // value contains </script> would terminate our inline <script>
