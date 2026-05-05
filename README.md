@@ -383,6 +383,38 @@ const client = new Client({
 });
 ```
 
+## Webhook verification
+
+ManyRows signs every outbound webhook delivery. Use `verifyWebhook`
+on your receiver:
+
+```ts
+import express from "express";
+import { verifyWebhook, WebhookError } from "@manyrows/manyrows-node";
+
+app.post(
+  "/webhooks/manyrows",
+  express.raw({ type: "application/json" }),  // raw body, NOT json
+  (req, res) => {
+    try {
+      verifyWebhook({ secret, headers: req.headers, body: req.body });
+    } catch (err) {
+      if (err instanceof WebhookError) return res.status(401).send(err.code);
+      throw err;
+    }
+    // body is verified — JSON.parse(req.body) and process
+    res.json({ ok: true });
+  },
+);
+```
+
+`verifyWebhook` checks both the HMAC-SHA256 signature (over
+`<timestamp>.<body>`) and that `X-Webhook-Timestamp` is within
+±5 minutes of now. Pass `toleranceMs` to widen or tighten.
+
+Read the body as **raw bytes** before verifying — re-serializing
+parsed JSON changes whitespace and breaks the check.
+
 ## License
 
 [MIT](./LICENSE)

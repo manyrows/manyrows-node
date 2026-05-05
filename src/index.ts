@@ -24,6 +24,8 @@ export type {
 } from "./auth.js";
 
 export { BffClient, BffError, PublicProxy, OAuthCallbackHtml, dispatchOAuthCallback } from "./bff.js";
+export { verifyWebhook, WebhookError } from "./webhook.js";
+export type { VerifyWebhookOptions, WebhookHeaders, WebhookErrorCode } from "./webhook.js";
 export type {
   BffClientOptions,
   BffSession,
