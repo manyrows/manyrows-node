@@ -16,7 +16,7 @@ export type {
   UserField,
 } from "./client.js";
 
-export { verifyToken, bearerToken, expressMiddleware } from "./auth.js";
+export { verifyToken, bearerToken, mrAtCookie, expressMiddleware } from "./auth.js";
 export type {
   VerifyOptions,
   ExpressMiddlewareOptions,
