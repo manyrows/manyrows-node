@@ -117,7 +117,9 @@ try {
 
 ## Auth middleware
 
-Validates bearer tokens from your end users by calling the ManyRows `/a/me` endpoint, then attaches the user ID to the request.
+Verifies the user's JWT **locally** against your install's JWKS — fetches `${baseURL}/.well-known/jwks.json` once, caches the keys in-process, refetches on a kid mismatch. No per-request round trip to ManyRows. Falls back to the `mr_at` HttpOnly cookie when no `Authorization: Bearer` header is present (cookie-mode AppKit deploys).
+
+Built on [`jose`](https://github.com/panva/jose) — the de-facto Node JWT library. Zero transitive deps.
 
 ### Express
 
@@ -139,6 +141,10 @@ app.get("/api/profile", (req, res) => {
 });
 ```
 
+The middleware accepts the JWT from either:
+1. `Authorization: Bearer <jwt>` (local mode / Tier 1)
+2. `mr_at` cookie (cookie-mode AppKit, when the auth host and app host share a registrable domain)
+
 For typed `req.manyrowsUserId` everywhere, augment `Express.Request` once:
 
 ```ts
@@ -153,28 +159,26 @@ declare global {
 
 ### Hono / Fastify / Next.js Route Handlers
 
-Use the lower-level `verifyToken`. Returns the user ID on success, `null` if rejected, throws on network/server errors:
+Use the lower-level `verifyToken` and the two header-extraction helpers. `verifyToken` returns the user ID (`sub`) on success, `null` for any verification failure (expired, malformed, wrong signature, missing `sub`):
 
 ```ts
-import { verifyToken, bearerToken } from "@manyrows/manyrows-node";
+import { verifyToken, bearerToken, mrAtCookie } from "@manyrows/manyrows-node";
 
-// Hono example:
+// Hono example — supports both Bearer and mr_at cookie:
 app.use("*", async (c, next) => {
-  const token = bearerToken(c.req.header("Authorization"));
+  const token =
+    bearerToken(c.req.header("Authorization")) ??
+    mrAtCookie(c.req.header("Cookie"));
   if (!token) return c.text("Unauthorized", 401);
 
-  try {
-    const userId = await verifyToken(token, {
-      baseURL: "https://app.manyrows.com",
-      workspaceSlug: "your-workspace",
-      appId: "your-app-id",
-    });
-    if (!userId) return c.text("Unauthorized", 401);
-    c.set("userId", userId);
-    return next();
-  } catch {
-    return c.text("Unauthorized", 401); // fail closed on network errors
-  }
+  const userId = await verifyToken(token, {
+    baseURL: "https://app.manyrows.com",
+    workspaceSlug: "your-workspace",
+    appId: "your-app-id",
+  });
+  if (!userId) return c.text("Unauthorized", 401);
+  c.set("userId", userId);
+  return next();
 });
 ```
 
