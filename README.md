@@ -2,11 +2,33 @@
 
 Official Node.js SDK for [ManyRows](https://manyrows.com). Mirrors the surface of [`manyrows-go`](https://github.com/manyrows/manyrows-go).
 
+The examples below assume a self-hosted deployment at
+`https://manyrows.example.com`. Swap in whatever host your install
+runs on (`http://localhost:3000` for local development, your own
+domain in production).
+
 ## Install
 
+This SDK is **not yet on npm**. Clone, build, and install the
+tarball into your project:
+
 ```bash
-npm install @manyrows/manyrows-node
+git clone https://github.com/manyrows/manyrows-node.git
+cd manyrows-node
+npm install
+npm run build
+npm pack
+# → manyrows-manyrows-node-1.0.0.tgz
 ```
+
+Then from your application:
+
+```bash
+npm install /path/to/manyrows-manyrows-node-1.0.0.tgz
+```
+
+(`dist/` is not committed, so `npm install github:manyrows/manyrows-node`
+would skip the build and leave no entry point — go through `npm pack`.)
 
 Requires **Node 18+** (uses the global `fetch`). TypeScript types are bundled.
 
@@ -18,7 +40,7 @@ The client wraps the ManyRows Server API. Requires an API key.
 import { Client } from "@manyrows/manyrows-node";
 
 const client = new Client({
-  baseURL: "https://app.manyrows.com",
+  baseURL: "https://manyrows.example.com",
   workspaceSlug: "your-workspace",
   appId: "your-app-id",
   apiKey: "mr_a1b2c3d4_yourSecretKey",
@@ -37,7 +59,7 @@ const delivery = await client.getDelivery();
 
 Secret values are returned as encrypted envelopes. Decrypt them with
 your workspace private key (downloaded once when you generated the
-workspace key in the admin UI):
+workspace key in your install's admin UI):
 
 ```ts
 import { Client, decryptSecret, type PrivateKeyJwk } from "@manyrows/manyrows-node";
@@ -130,7 +152,7 @@ import { expressMiddleware, type AuthenticatedRequest } from "@manyrows/manyrows
 const app = express();
 
 app.use(expressMiddleware({
-  baseURL: "https://app.manyrows.com",
+  baseURL: "https://manyrows.example.com",
   workspaceSlug: "your-workspace",
   appId: "your-app-id",
 }));
@@ -172,7 +194,7 @@ app.use("*", async (c, next) => {
   if (!token) return c.text("Unauthorized", 401);
 
   const userId = await verifyToken(token, {
-    baseURL: "https://app.manyrows.com",
+    baseURL: "https://manyrows.example.com",
     workspaceSlug: "your-workspace",
     appId: "your-app-id",
   });
@@ -189,7 +211,7 @@ import express from "express";
 import { Client, expressMiddleware, type AuthenticatedRequest } from "@manyrows/manyrows-node";
 
 const client = new Client({
-  baseURL: "https://app.manyrows.com",
+  baseURL: "https://manyrows.example.com",
   workspaceSlug: "my-workspace",
   appId: "my-app-id",
   apiKey: process.env.MANYROWS_API_KEY!,
@@ -200,7 +222,7 @@ const app = express();
 app.use(
   "/api",
   expressMiddleware({
-    baseURL: "https://app.manyrows.com",
+    baseURL: "https://manyrows.example.com",
     workspaceSlug: "my-workspace",
     appId: "my-app-id",
   }),
