@@ -23,18 +23,8 @@ export type {
   AuthenticatedRequest,
 } from "./auth.js";
 
-export { BffClient, BffError, PublicProxy, OAuthCallbackHtml, dispatchOAuthCallback } from "./bff.js";
 export { verifyWebhook, WebhookError } from "./webhook.js";
 export type { VerifyWebhookOptions, WebhookHeaders, WebhookErrorCode } from "./webhook.js";
 
 export { decryptSecret, computePublicJwkFingerprint } from "./secrets.js";
 export type { SecretEnvelope, PrivateKeyJwk } from "./secrets.js";
-export type {
-  BffClientOptions,
-  BffSession,
-  ClientContext,
-  ProxyResponse,
-  PublicProxyOptions,
-  OAuthCallbackOutcome,
-  DispatchOAuthCallbackOptions,
-} from "./bff.js";
