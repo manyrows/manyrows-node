@@ -27,12 +27,14 @@ async function signToken(opts: {
   sub?: string;
   exp?: number;
   alg?: string;
+  aud?: string;
 } = {}): Promise<string> {
   const sub = opts.sub ?? "user_xyz";
   return await new SignJWT({})
     .setProtectedHeader({ alg: opts.alg ?? "ES256", kid })
     .setIssuedAt()
     .setSubject(sub)
+    .setAudience(opts.aud ?? "app_123")
     .setExpirationTime(opts.exp ?? "5m")
     .sign(key.privateKey);
 }
@@ -101,28 +103,35 @@ describe("bearerToken", () => {
 // ===== mrAtCookie =====
 
 describe("mrAtCookie", () => {
-  it("extracts the mr_at cookie value", () => {
-    expect(mrAtCookie("mr_at=abc123")).toBe("abc123");
+  const appId = "app_123";
+  const cookieName = `mr_at_${appId}`;
+
+  it("extracts the per-app cookie value", () => {
+    expect(mrAtCookie(`${cookieName}=abc123`, appId)).toBe("abc123");
   });
 
   it("ignores other cookies and whitespace", () => {
-    expect(mrAtCookie("foo=1; mr_at=abc; bar=2")).toBe("abc");
-    expect(mrAtCookie("  mr_at=abc  ")).toBe("abc");
+    expect(mrAtCookie(`foo=1; ${cookieName}=abc; bar=2`, appId)).toBe("abc");
+    expect(mrAtCookie(`  ${cookieName}=abc  `, appId)).toBe("abc");
   });
 
   it("handles values containing '='", () => {
-    expect(mrAtCookie("mr_at=eyJ.payload=xyz")).toBe("eyJ.payload=xyz");
+    expect(mrAtCookie(`${cookieName}=eyJ.payload=xyz`, appId)).toBe("eyJ.payload=xyz");
+  });
+
+  it("ignores a different app's cookie", () => {
+    expect(mrAtCookie("mr_at_app_other=abc", appId)).toBeNull();
   });
 
   it("returns null when absent / empty / undefined", () => {
-    expect(mrAtCookie(undefined)).toBeNull();
-    expect(mrAtCookie("")).toBeNull();
-    expect(mrAtCookie("foo=1; bar=2")).toBeNull();
-    expect(mrAtCookie("mr_at=")).toBeNull();
+    expect(mrAtCookie(undefined, appId)).toBeNull();
+    expect(mrAtCookie("", appId)).toBeNull();
+    expect(mrAtCookie("foo=1; bar=2", appId)).toBeNull();
+    expect(mrAtCookie(`${cookieName}=`, appId)).toBeNull();
   });
 
   it("joins arrays into one cookie string", () => {
-    expect(mrAtCookie(["foo=1", "mr_at=abc"])).toBe("abc");
+    expect(mrAtCookie(["foo=1", `${cookieName}=abc`], appId)).toBe("abc");
   });
 });
 
@@ -234,7 +243,7 @@ describe("expressMiddleware", () => {
   it("falls back to the mr_at cookie when no Bearer header", async () => {
     const tok = await signToken({ sub: "user_via_cookie" });
     const mw = expressMiddleware({ ...verifyOpts, fetch: jwksFetch() });
-    const { req, res, next } = mockExpress({ cookie: `mr_at=${tok}` });
+    const { req, res, next } = mockExpress({ cookie: `mr_at_app_123=${tok}` });
     await mw(req, res, next);
     expect(next).toHaveBeenCalledOnce();
     expect(req.manyrowsUserId).toBe("user_via_cookie");
@@ -246,7 +255,7 @@ describe("expressMiddleware", () => {
     const mw = expressMiddleware({ ...verifyOpts, fetch: jwksFetch() });
     const { req, res, next } = mockExpress({
       authorization: `Bearer ${tokHeader}`,
-      cookie: `mr_at=${tokCookie}`,
+      cookie: `mr_at_app_123=${tokCookie}`,
     });
     await mw(req, res, next);
     expect(req.manyrowsUserId).toBe("from_header");
@@ -266,6 +275,18 @@ describe("expressMiddleware", () => {
     const tampered = tok.slice(0, -2) + (tok.endsWith("A") ? "BB" : "AA");
     const mw = expressMiddleware({ ...verifyOpts, fetch: jwksFetch() });
     const { req, res, next } = mockExpress({ authorization: `Bearer ${tampered}` });
+    await mw(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 401 when the token's aud points at a different app", async () => {
+    // Cross-app cookie ride-along: a token minted for app_other must
+    // not authenticate a request landing on the middleware configured
+    // for app_123.
+    const tok = await signToken({ aud: "app_other" });
+    const mw = expressMiddleware({ ...verifyOpts, fetch: jwksFetch() });
+    const { req, res, next } = mockExpress({ authorization: `Bearer ${tok}` });
     await mw(req, res, next);
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(401);

@@ -11,7 +11,15 @@ import { createRemoteJWKSet, customFetch, jwtVerify, type JWTVerifyGetKey } from
 
 const USER_AGENT = "manyrows-node-auth/1.0";
 
-const ACCESS_COOKIE_NAME = "mr_at";
+// Cookie name is per-app — "mr_at_<appId>" — so two ManyRows apps on
+// the same eTLD don't share one cookie slot in the browser jar.
+// Mirrors manyrows-core's clientauth.AccessCookieName(appID). Keep in
+// sync if the server-side naming ever changes.
+const ACCESS_COOKIE_PREFIX = "mr_at_";
+
+function accessCookieName(appId: string): string {
+  return ACCESS_COOKIE_PREFIX + appId;
+}
 
 export interface VerifyOptions {
   /** Base URL of the ManyRows service, e.g. "https://app.manyrows.com". */
@@ -66,14 +74,20 @@ export async function verifyToken(
 ): Promise<string | null> {
   if (!token) return null;
   try {
+    // `audience: opts.appId` enforces that the token's aud claim
+    // contains this app's ID — jose accepts both string and string[]
+    // shapes per RFC 7519. Catches the cross-app cookie ride-along
+    // between two ManyRows apps on the same eTLD.
     const { payload } = await jwtVerify(token, getJWKS(opts.baseURL, opts.fetch), {
       algorithms: ["ES256"],
       clockTolerance: 60,
+      audience: opts.appId,
     });
     const sub = payload.sub;
     return typeof sub === "string" && sub.length > 0 ? sub : null;
   } catch {
-    // Signature mismatch, expired, malformed, etc. → not authenticated.
+    // Signature mismatch, expired, audience mismatch, malformed, etc.
+    // → not authenticated.
     return null;
   }
 }
@@ -94,19 +108,26 @@ export function bearerToken(headerValue: string | string[] | undefined): string 
 }
 
 /**
- * Extract the mr_at session cookie from a Cookie header value. Used as
- * a fallback when the SDK is in cookie mode and no Authorization
- * header is present. Returns null when absent / empty.
+ * Extract the mr_at_<appId> session cookie from a Cookie header value.
+ * Used as a fallback when the SDK is in cookie mode and no
+ * Authorization header is present. Returns null when absent / empty.
+ *
+ * The cookie name is per-app so two ManyRows apps on the same eTLD
+ * don't collide — pass the configured appId to read the right one.
  */
-export function mrAtCookie(cookieHeaderValue: string | string[] | undefined): string | null {
-  if (!cookieHeaderValue) return null;
+export function mrAtCookie(
+  cookieHeaderValue: string | string[] | undefined,
+  appId: string,
+): string | null {
+  if (!cookieHeaderValue || !appId) return null;
   const value = Array.isArray(cookieHeaderValue) ? cookieHeaderValue.join("; ") : cookieHeaderValue;
   if (!value) return null;
+  const target = accessCookieName(appId);
   for (const raw of value.split(";")) {
     const eq = raw.indexOf("=");
     if (eq < 0) continue;
     const name = raw.slice(0, eq).trim();
-    if (name !== ACCESS_COOKIE_NAME) continue;
+    if (name !== target) continue;
     const v = raw.slice(eq + 1).trim();
     return v.length > 0 ? v : null;
   }
@@ -172,7 +193,7 @@ export function expressMiddleware(opts: ExpressMiddlewareOptions) {
   return async (req: ReqLike & AuthenticatedRequest, res: ResLike, next: NextFn): Promise<void> => {
     const token =
       bearerToken(req.headers["authorization"] ?? req.headers["Authorization"]) ??
-      mrAtCookie(req.headers["cookie"] ?? req.headers["Cookie"]);
+      mrAtCookie(req.headers["cookie"] ?? req.headers["Cookie"], opts.appId);
     if (!token) {
       res.status(401).send("Unauthorized");
       return;
